@@ -33,6 +33,8 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+/* hidden 은 display 규칙에 밀리기 쉬우므로 못을 박아 둔다 */
+[hidden]{display:none !important}
 html,body{margin:0}
 body{
   background:var(--paper); color:var(--ink);
@@ -143,8 +145,39 @@ button.chip:disabled{opacity:.4; cursor:default}
 .help b{color:var(--ink); font-weight:600}
 .help p{margin:0 0 8px}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+/* 탭 */
+.tabs{display:flex; gap:6px; margin-bottom:4px}
+.tab{
+  flex:1 1 0; min-height:46px; padding:11px 8px; font-family:inherit; font-size:.95rem;
+  font-weight:500; color:var(--ink-soft); background:transparent;
+  border:none; border-bottom:2px solid var(--rule); cursor:pointer;
+}
+.tab[aria-selected=true]{color:var(--accent); border-bottom-color:var(--accent); font-weight:600}
+
+/* 미리보기 */
+.pvbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:16px 0 0}
+.pvtoggle{
+  padding:11px 18px; min-height:46px; font-family:inherit; font-size:.92rem; font-weight:500;
+  background:var(--panel-2); color:var(--ink); border:1px solid var(--rule);
+  border-radius:var(--r); cursor:pointer;
+}
+.pvtoggle:hover{border-color:var(--accent)}
+.preview{margin-top:14px; display:flex; flex-direction:column; gap:14px}
+.pv-page{position:relative; border:1px solid var(--rule); border-radius:6px; overflow:hidden; background:#fff}
+.pv-page canvas{display:block; width:100%; height:auto}
+.pv-num{
+  position:absolute; right:8px; bottom:6px; font-size:.7rem; color:#8b96a2;
+  background:rgba(255,255,255,.85); padding:1px 6px; border-radius:4px;
+}
+
+/* 음원 */
+.semis{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
+.audioplayer{width:100%; margin:4px 0 14px}
+.meter{height:6px; border-radius:3px; background:var(--panel-2); overflow:hidden; margin-top:10px}
+.meter i{display:block; height:100%; width:0; background:var(--accent); transition:width .2s}
+
 @media (max-width:420px){
-  .keys{grid-template-columns:repeat(4,1fr)}
+  .keys,.semis{grid-template-columns:repeat(4,1fr)}
   .shifts{grid-template-columns:repeat(2,1fr)}
 }
 </style>
@@ -157,6 +190,13 @@ button.chip:disabled{opacity:.4; cursor:default}
     <p class="sub">PDF 악보의 멜로디와 코드를 원하는 키로 바꿉니다. 가사와 줄바꿈은 그대로 둡니다.</p>
     <p class="privacy">변환은 이 기기 안에서 끝납니다. 악보 파일은 어디로도 올라가지 않습니다.</p>
   </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tab-score" role="tab" aria-selected="true" aria-controls="panel-score">악보 PDF</button>
+    <button class="tab" id="tab-audio" role="tab" aria-selected="false" aria-controls="panel-audio">음원 파일</button>
+  </div>
+
+  <div id="panel-score" role="tabpanel" class="stack">
 
   <label class="pick" id="pick" tabindex="0">
     <svg class="staff" viewBox="0 0 84 30" aria-hidden="true">
@@ -217,19 +257,89 @@ button.chip:disabled{opacity:.4; cursor:default}
       <a class="again" id="again" href="#">다른 키로</a>
     </div>
     <p class="savehint" id="savehint">내려받은 파일은 브라우저의 다운로드 위치에 저장됩니다.</p>
+    <div class="pvbar">
+      <button class="pvtoggle" id="pvtoggle" type="button">미리보기</button>
+      <span class="savehint" id="pvhint" style="margin:0"></span>
+    </div>
+    <div class="preview" id="preview" hidden></div>
     <div id="notes"></div>
   </section>
 
   <div class="help">
     <p><b>되는 악보</b> &nbsp;Sibelius·Finale·MuseScore 등으로 조판한 PDF. 악보 프로그램에서 내보낸 것도, 그것을 다시 “PDF로 인쇄”한 것도 읽습니다.</p>
     <p><b>안 되는 악보</b> &nbsp;종이를 찍거나 스캔한 PDF. 음표가 그림이라 음높이를 읽을 수 없습니다.</p>
-    <p><b>한 가지 살필 것</b> &nbsp;조표의 ♯·♭ 개수가 늘어나면 조표와 첫 음 사이가 빠듯해질 수 있습니다. 그럴 때는 아래에 알려 드립니다.</p>
+    <p><b>한 가지 살필 것</b> &nbsp;조표의 ♯·♭ 개수가 늘어나면 조표와 첫 음 사이가 빠듯해질 수 있습니다. 그럴 때는 결과에 알려 드립니다.</p>
   </div>
+
+  </div><!-- /악보 패널 -->
+
+  <div id="panel-audio" role="tabpanel" class="stack" hidden>
+
+    <label class="pick" id="apick" tabindex="0">
+      <svg class="staff" viewBox="0 0 84 30" aria-hidden="true">
+        <g stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".75">
+          <path d="M6 15h5l3-8 4 16 3-11 3 6h5"/><path d="M35 15h5l3-10 4 20 3-13 3 7h5"/>
+          <path d="M64 15h5l3-6 4 12 3-8"/>
+        </g>
+      </svg>
+      <strong>음원 파일 고르기</strong>
+      <span>mp3 · m4a · wav · aac — 누르거나 끌어다 놓으세요</span>
+      <input type="file" id="afile" accept="audio/*,.mp3,.m4a,.wav,.aac,.aiff">
+    </label>
+
+    <div class="panel" id="abusy" hidden>
+      <div class="busy"><div class="spin"></div><span id="abusytext">읽는 중…</span></div>
+      <div class="meter" id="ameter" hidden><i id="ameterbar"></i></div>
+    </div>
+
+    <div class="panel" id="ablocked" hidden>
+      <div class="note-msg bad" id="ablockedtext"></div>
+    </div>
+
+    <section class="panel" id="ainfo" hidden>
+      <div class="scorehead">
+        <div class="keybadge"><b id="alen">0:00</b><small>길이</small></div>
+        <div class="scoremeta">
+          <p class="fname" id="afname"></p>
+          <p class="facts" id="afacts"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="apicker" hidden>
+      <h2>몇 반음 옮길까요</h2>
+      <div class="semis" id="semis"></div>
+      <button class="go" id="ago" disabled>바꾸기</button>
+      <p class="savehint">빠르기는 그대로 두고 음높이만 바꿉니다.</p>
+    </section>
+
+    <section class="panel result" id="aresult" hidden>
+      <h3 id="aresulttitle"></h3>
+      <p class="resultline" id="aresultline"></p>
+      <audio class="audioplayer" id="aplayer" controls></audio>
+      <div class="actions">
+        <a class="save" id="asave" download>음원 내려받기</a>
+        <button class="share" id="ashare" type="button" hidden>공유</button>
+        <a class="again" id="aagain" href="#">다시</a>
+      </div>
+      <p class="savehint">많이 옮길수록 소리가 뭉개집니다. 반음 한두 개가 가장 깔끔합니다.</p>
+    </section>
+
+  <div class="help">
+    <p><b>되는 파일</b> &nbsp;mp3 · m4a · wav · aac 등 브라우저가 읽는 소리 파일. 가지고 계신 MR·반주 파일을 쓰시면 됩니다.</p>
+    <p><b>유튜브는 안 됩니다</b> &nbsp;유튜브 플레이어는 소리를 바깥으로 내주지 않고, 내려받는 것은 유튜브 이용약관 위반입니다.</p>
+    <p><b>소리 품질</b> &nbsp;빠르기를 지키면서 음높이만 바꾸면 소리가 조금 뭉개집니다. 반음 한두 개는 연습용으로 쓸 만하고, 그 이상은 티가 납니다.</p>
+    <p><b>길이</b> &nbsp;원본과 똑같이 맞춰 나오므로 반주에 맞춰 연주해도 어긋나지 않습니다.</p>
+  </div>
+
+  </div><!-- /음원 패널 -->
 
 </div>
 
 <script src="pdf-lib.min.js"></script>
 <script src="engine.js"></script>
+<script src="preview.js"></script>
+<script src="audio.js"></script>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
@@ -238,6 +348,7 @@ button.chip:disabled{opacity:.4; cursor:default}
   const SHIFTS = [['반음 ↓',-1],['한 음 ↓',-2],['한 음 ↑',2],['반음 ↑',1]];
 
   let fileBytes = null, fileName = '', info = null, choice = null, blobUrl = null;
+  let previewBytes = null, previewDone = false;
 
   const show = (el, on) => { el.hidden = !on; };
 
@@ -402,6 +513,14 @@ button.chip:disabled{opacity:.4; cursor:default}
       box.appendChild(ul);
       nd.appendChild(box);
     }
+    // 미리보기는 접어 두었다가 누를 때 그린다 (그리는 도구가 1MB 라서)
+    previewBytes = out.bytes;
+    previewDone = false;
+    $('preview').hidden = true;
+    $('preview').textContent = '';
+    $('pvtoggle').textContent = '미리보기';
+    $('pvhint').textContent = '';
+
     $('go').disabled = false;
     show($('result'), true);
     $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -427,6 +546,162 @@ button.chip:disabled{opacity:.4; cursor:default}
     e.preventDefault();
     show($('result'), false);
     $('picker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // ---- 미리보기 ----
+  $('pvtoggle').addEventListener('click', async () => {
+    const box = $('preview'), btn = $('pvtoggle');
+    if (!previewBytes) return;
+    if (previewDone) {                       // 이미 그렸으면 접었다 폈다만
+      box.hidden = !box.hidden;
+      btn.textContent = box.hidden ? '미리보기' : '미리보기 접기';
+      return;
+    }
+    btn.disabled = true;
+    $('pvhint').textContent = '그리는 중…';
+    box.hidden = false;
+    try {
+      const n = await renderPreview(previewBytes, box, (i, t) => {
+        $('pvhint').textContent = `그리는 중… ${i}/${t}쪽`;
+      });
+      previewDone = true;
+      btn.textContent = '미리보기 접기';
+      $('pvhint').textContent = `${n}쪽`;
+    } catch (err) {
+      box.hidden = true;
+      $('pvhint').textContent = (err && err.message) || '미리보기를 열지 못했습니다.';
+    }
+    btn.disabled = false;
+  });
+
+  // ---- 탭 ----
+  function selectTab(which) {
+    const isScore = which === 'score';
+    $('tab-score').setAttribute('aria-selected', String(isScore));
+    $('tab-audio').setAttribute('aria-selected', String(!isScore));
+    $('panel-score').hidden = !isScore;
+    $('panel-audio').hidden = isScore;
+  }
+  $('tab-score').addEventListener('click', () => selectTab('score'));
+  $('tab-audio').addEventListener('click', () => selectTab('audio'));
+
+  // ---- 음원 ----
+  let audioBuf = null, audioName = '', semis = null, audioUrl = null;
+
+  const SEMIS = [-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6];
+  const SEMI_NAME = { 1: '반음', 2: '한 음', 3: '한 음 반', 4: '두 음', 5: '두 음 반', 6: '세 음' };
+
+  function buildSemis() {
+    const box = $('semis'); box.textContent = '';
+    for (const n of SEMIS) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      const t = document.createElement('span');
+      t.className = 'note';
+      t.textContent = (n > 0 ? '+' : '') + n;
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = SEMI_NAME[Math.abs(n)];
+      b.append(t, tag);
+      b.onclick = () => {
+        document.querySelectorAll('#semis .chip').forEach(x => x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+        semis = n;
+        $('ago').disabled = false;
+      };
+      box.appendChild(b);
+    }
+  }
+
+  async function openAudio(f) {
+    $('ainfo').hidden = $('apicker').hidden = $('aresult').hidden = $('ablocked').hidden = true;
+    semis = null;
+    audioName = f.name;
+    $('abusytext').textContent = '음원을 읽는 중…';
+    $('ameter').hidden = true;
+    $('abusy').hidden = false;
+    try {
+      audioBuf = await decodeAudio(f);
+    } catch (e) {
+      $('abusy').hidden = true;
+      $('ablockedtext').textContent = '이 파일은 읽지 못했습니다. mp3 · m4a · wav 같은 소리 파일인지 확인해 주세요.';
+      $('ablocked').hidden = false;
+      return;
+    }
+    $('abusy').hidden = true;
+    $('alen').textContent = formatTime(audioBuf.duration);
+    $('afname').textContent = audioName;
+    $('afacts').textContent =
+      `${audioBuf.numberOfChannels === 1 ? '모노' : '스테레오'} · ${Math.round(audioBuf.sampleRate / 100) / 10}kHz`;
+    $('ainfo').hidden = false;
+    buildSemis();
+    $('ago').disabled = true;
+    $('apicker').hidden = false;
+    $('apicker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function convertAudio() {
+    if (semis === null || !audioBuf) return;
+    $('ago').disabled = true;
+    $('aresult').hidden = true;
+    $('abusytext').textContent = '소리를 바꾸는 중…';
+    $('ameter').hidden = false;
+    $('ameterbar').style.width = '0%';
+    $('abusy').hidden = false;
+    await new Promise(r => setTimeout(r, 30));
+    let res;
+    try {
+      res = await shiftPitch(audioBuf, semis, p => { $('ameterbar').style.width = (p * 100).toFixed(0) + '%'; });
+    } catch (e) {
+      $('abusy').hidden = true;
+      $('ablockedtext').textContent = '바꾸는 중 문제가 생겼습니다: ' + ((e && e.message) || e);
+      $('ablocked').hidden = false;
+      $('ago').disabled = false;
+      return;
+    }
+    const wav = toWav(res);
+    $('abusy').hidden = true;
+
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+    const base = audioName.replace(/\.[^.]+$/, '');
+    const label = (semis > 0 ? '+' : '') + semis;
+    $('aresulttitle').textContent = `${label}반음`;
+    $('aresultline').textContent =
+      `${formatTime(res.length / res.sampleRate)} · ${(wav.length / 1048576).toFixed(1)}MB · 빠르기 그대로`;
+    $('aplayer').src = audioUrl;
+    const save = $('asave');
+    save.href = audioUrl;
+    save.setAttribute('download', `${base}_${label}반음.wav`);
+
+    const sb = $('ashare');
+    const outFile = new File([wav], `${base}_${label}반음.wav`, { type: 'audio/wav' });
+    if (navigator.canShare && navigator.canShare({ files: [outFile] })) {
+      sb.hidden = false;
+      sb.onclick = async () => { try { await navigator.share({ files: [outFile] }); } catch (err) {} };
+    } else sb.hidden = true;
+
+    $('ago').disabled = false;
+    $('aresult').hidden = false;
+    $('aresult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('afile').addEventListener('change', e => { if (e.target.files[0]) openAudio(e.target.files[0]); });
+  $('apick').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('afile').click(); }
+  });
+  ['dragenter', 'dragover'].forEach(t => $('apick').addEventListener(t, e => {
+    e.preventDefault(); $('apick').classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(t => $('apick').addEventListener(t, e => {
+    e.preventDefault(); $('apick').classList.remove('over');
+  }));
+  $('apick').addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) openAudio(f); });
+  $('ago').addEventListener('click', convertAudio);
+  $('aagain').addEventListener('click', e => {
+    e.preventDefault(); $('aresult').hidden = true;
+    $('apicker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 })();
 </script>
