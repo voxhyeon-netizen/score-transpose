@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>악보 이조</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
+<style>
+/* 레이아웃: 위에서 아래로 한 줄 흐름 — 악보 고르기 → 지금 키 → 새 키 → 받기 */
+:root{
+  --paper:#f6f8fa; --panel:#ffffff; --panel-2:#eef2f6;
+  --ink:#15191e; --ink-soft:#5a6672; --ink-faint:#8b96a2;
+  --rule:#d7dde4; --accent:#17536f; --accent-ink:#ffffff; --accent-soft:#e4eef4;
+  --warn:#7a5310; --warn-bg:#fdf3e0; --bad:#8d2f2f; --bad-bg:#fbeded;
+  --font-ui:"IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;
+  --font-note:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --r:10px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --paper:#111417; --panel:#1a1e22; --panel-2:#232a30;
+  --ink:#e9edf1; --ink-soft:#a3aeb9; --ink-faint:#7b8691;
+  --rule:#2c333a; --accent:#7cc2e4; --accent-ink:#0d1518; --accent-soft:#14242d;
+  --warn:#e3b263; --warn-bg:#2a2112; --bad:#e89292; --bad-bg:#2c1717;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#111417; --panel:#1a1e22; --panel-2:#232a30;
+  --ink:#e9edf1; --ink-soft:#a3aeb9; --ink-faint:#7b8691;
+  --rule:#2c333a; --accent:#7cc2e4; --accent-ink:#0d1518; --accent-soft:#14242d;
+  --warn:#e3b263; --warn-bg:#2a2112; --bad:#e89292; --bad-bg:#2c1717;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--font-ui); font-size:16px; line-height:1.6;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{
+  max-width:720px; margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:28px 56px;
+}
+h1{font-size:1.5rem; font-weight:600; margin:0 0 4px; letter-spacing:-.01em; text-wrap:balance}
+.sub{color:var(--ink-soft); margin:0 0 6px; font-size:.95rem}
+.privacy{color:var(--ink-faint); font-size:.82rem; margin:0 0 24px}
+
+.panel{background:var(--panel); border:1px solid var(--rule); border-radius:var(--r); padding:18px}
+.stack{display:flex; flex-direction:column; gap:18px}
+
+/* 악보 고르기 */
+.pick{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:34px 18px; text-align:center; cursor:pointer;
+  border:1.5px dashed var(--rule); border-radius:var(--r);
+  background:var(--panel); transition:border-color .15s, background .15s;
+}
+.pick:hover,.pick:focus-visible,.pick.over{border-color:var(--accent); background:var(--accent-soft)}
+.pick strong{font-weight:600}
+.pick span{color:var(--ink-soft); font-size:.88rem}
+.staff{display:block; width:84px; height:30px; opacity:.85}
+input[type=file]{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+
+/* 악보 정보 */
+.scorehead{display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap}
+.keybadge{
+  flex:0 0 auto; min-width:76px; padding:8px 12px; text-align:center;
+  background:var(--panel-2); border-radius:var(--r);
+}
+.keybadge b{display:block; font-family:var(--font-note); font-size:2rem; line-height:1.1}
+.keybadge small{display:block; color:var(--ink-soft); font-size:.74rem; letter-spacing:.04em}
+.scoremeta{flex:1 1 180px; min-width:0}
+.fname{font-weight:500; word-break:break-all; margin:0 0 2px}
+.facts{color:var(--ink-soft); font-size:.85rem; margin:0; font-variant-numeric:tabular-nums}
+
+/* 키 고르기 */
+h2{font-size:.78rem; font-weight:600; letter-spacing:.09em; text-transform:uppercase;
+   color:var(--ink-faint); margin:0 0 10px}
+.shifts{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px}
+.keys{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
+button.chip{
+  font-family:inherit; font-size:.92rem; color:var(--ink);
+  background:var(--panel-2); border:1px solid transparent; border-radius:8px;
+  padding:11px 4px; cursor:pointer; min-height:48px; line-height:1.25;
+  transition:background .12s, border-color .12s;
+}
+button.chip:hover{border-color:var(--accent)}
+button.chip[aria-pressed=true]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent)}
+button.chip.now{outline:2px solid var(--accent); outline-offset:-2px}
+button.chip .note{font-family:var(--font-note); font-size:1.12rem}
+button.chip .tag{display:block; font-size:.66rem; color:var(--ink-faint); letter-spacing:.03em}
+button.chip[aria-pressed=true] .tag{color:var(--accent-ink); opacity:.8}
+button.chip:disabled{opacity:.4; cursor:default}
+
+.go{
+  width:100%; margin-top:16px; padding:14px; min-height:52px;
+  font-family:inherit; font-size:1rem; font-weight:600;
+  background:var(--accent); color:var(--accent-ink);
+  border:none; border-radius:var(--r); cursor:pointer;
+}
+.go:disabled{opacity:.45; cursor:default}
+
+/* 결과 */
+.result h3{margin:0 0 2px; font-size:1.05rem; font-weight:600}
+.resultline{color:var(--ink-soft); font-size:.88rem; margin:0 0 14px; font-variant-numeric:tabular-nums}
+.chordmap{display:flex; flex-wrap:wrap; gap:6px 14px; margin:0 0 16px; padding:0; list-style:none}
+.chordmap li{font-family:var(--font-note); font-size:.95rem; white-space:nowrap}
+.chordmap .from{color:var(--ink-faint)}
+.chordmap .arrow{color:var(--ink-faint); margin:0 3px}
+.save{
+  display:inline-block; padding:13px 22px; min-height:50px; line-height:1.8;
+  background:var(--accent); color:var(--accent-ink); text-decoration:none;
+  border-radius:var(--r); font-weight:600;
+}
+.actions{display:flex; flex-wrap:wrap; align-items:center; gap:10px}
+.share{
+  padding:13px 22px; min-height:50px; font-family:inherit; font-size:1rem; font-weight:600;
+  background:var(--panel-2); color:var(--ink); border:1px solid var(--rule);
+  border-radius:var(--r); cursor:pointer;
+}
+.share:hover{border-color:var(--accent)}
+.again{
+  padding:13px 10px; line-height:1.8;
+  color:var(--accent); text-decoration:none; font-weight:500;
+}
+.savehint{margin:10px 0 0; color:var(--ink-faint); font-size:.8rem}
+.note-msg{margin:14px 0 0; padding:11px 13px; border-radius:8px; font-size:.86rem}
+.note-msg.warn{background:var(--warn-bg); color:var(--warn)}
+.note-msg.bad{background:var(--bad-bg); color:var(--bad)}
+.note-msg ul{margin:6px 0 0; padding-left:18px}
+
+.busy{display:flex; align-items:center; gap:10px; color:var(--ink-soft); font-size:.9rem}
+.spin{width:16px; height:16px; border:2px solid var(--rule); border-top-color:var(--accent);
+      border-radius:50%; animation:sp .8s linear infinite; flex:0 0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){ .spin{animation:none} }
+
+.help{margin-top:30px; color:var(--ink-soft); font-size:.85rem; line-height:1.75}
+.help b{color:var(--ink); font-weight:600}
+.help p{margin:0 0 8px}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+@media (max-width:420px){
+  .keys{grid-template-columns:repeat(4,1fr)}
+  .shifts{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="wrap stack">
+
+  <header>
+    <h1>악보 이조</h1>
+    <p class="sub">PDF 악보의 멜로디와 코드를 원하는 키로 바꿉니다. 가사와 줄바꿈은 그대로 둡니다.</p>
+    <p class="privacy">변환은 이 기기 안에서 끝납니다. 악보 파일은 어디로도 올라가지 않습니다.</p>
+  </header>
+
+  <label class="pick" id="pick" tabindex="0">
+    <svg class="staff" viewBox="0 0 84 30" aria-hidden="true">
+      <g stroke="currentColor" stroke-width="1" opacity=".45">
+        <line x1="0" y1="6" x2="84" y2="6"/><line x1="0" y1="11" x2="84" y2="11"/>
+        <line x1="0" y1="16" x2="84" y2="16"/><line x1="0" y1="21" x2="84" y2="21"/>
+        <line x1="0" y1="26" x2="84" y2="26"/>
+      </g>
+      <g fill="currentColor">
+        <ellipse cx="20" cy="21" rx="4.4" ry="3.2" transform="rotate(-18 20 21)"/>
+        <rect x="23.6" y="8" width="1.4" height="13"/>
+        <ellipse cx="46" cy="13.5" rx="4.4" ry="3.2" transform="rotate(-18 46 13.5)"/>
+        <rect x="49.6" y="1" width="1.4" height="13"/>
+        <ellipse cx="68" cy="16" rx="4.4" ry="3.2" transform="rotate(-18 68 16)"/>
+        <rect x="71.6" y="3" width="1.4" height="13"/>
+      </g>
+    </svg>
+    <strong>악보 PDF 고르기</strong>
+    <span>여기를 누르거나 파일을 끌어다 놓으세요</span>
+    <input type="file" id="file" accept="application/pdf,.pdf">
+  </label>
+
+  <div class="panel" id="busy" hidden>
+    <div class="busy"><div class="spin"></div><span id="busytext">악보를 읽는 중…</span></div>
+  </div>
+
+  <div class="panel" id="blocked" hidden>
+    <div class="note-msg bad" id="blockedtext"></div>
+  </div>
+
+  <section class="panel" id="score" hidden>
+    <div class="scorehead">
+      <div class="keybadge">
+        <b id="keyletter">F</b>
+        <small id="keysig">♭ 1개</small>
+      </div>
+      <div class="scoremeta">
+        <p class="fname" id="fname"></p>
+        <p class="facts" id="facts"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="picker" hidden>
+    <h2>어떤 키로 바꿀까요</h2>
+    <div class="shifts" id="shifts"></div>
+    <div class="keys" id="keys"></div>
+    <button class="go" id="go" disabled>바꾸기</button>
+  </section>
+
+  <section class="panel result" id="result" hidden>
+    <h3 id="resulttitle"></h3>
+    <p class="resultline" id="resultline"></p>
+    <ul class="chordmap" id="chordmap"></ul>
+    <div class="actions">
+      <a class="save" id="save" download>PDF 내려받기</a>
+      <button class="share" id="share" type="button" hidden>공유</button>
+      <a class="again" id="again" href="#">다른 키로</a>
+    </div>
+    <p class="savehint" id="savehint">내려받은 파일은 브라우저의 다운로드 위치에 저장됩니다.</p>
+    <div id="notes"></div>
+  </section>
+
+  <div class="help">
+    <p><b>되는 악보</b> &nbsp;Sibelius·Finale·MuseScore 등으로 조판한 PDF. 악보 프로그램에서 내보낸 것도, 그것을 다시 “PDF로 인쇄”한 것도 읽습니다.</p>
+    <p><b>안 되는 악보</b> &nbsp;종이를 찍거나 스캔한 PDF. 음표가 그림이라 음높이를 읽을 수 없습니다.</p>
+    <p><b>한 가지 살필 것</b> &nbsp;조표의 ♯·♭ 개수가 늘어나면 조표와 첫 음 사이가 빠듯해질 수 있습니다. 그럴 때는 아래에 알려 드립니다.</p>
+  </div>
+
+</div>
+
+<script src="pdf-lib.min.js"></script>
+<script src="engine.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const KEYS = [['C','C'],['D♭','Db'],['D','D'],['E♭','Eb'],['E','E'],['F','F'],
+                ['F♯','F#'],['G','G'],['A♭','Ab'],['A','A'],['B♭','Bb'],['B','B']];
+  const SHIFTS = [['반음 ↓',-1],['한 음 ↓',-2],['한 음 ↑',2],['반음 ↑',1]];
+
+  let fileBytes = null, fileName = '', info = null, choice = null, blobUrl = null;
+
+  const show = (el, on) => { el.hidden = !on; };
+
+  function reset() {
+    $('score').hidden = $('picker').hidden = $('result').hidden = $('blocked').hidden = true;
+    choice = null;
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  }
+
+  function fmtKey(name) {
+    return name.replace('b', '♭').replace('#', '♯');
+  }
+
+  function sigText(fifths) {
+    if (!fifths) return '조표 없음';
+    return (fifths > 0 ? '♯ ' : '♭ ') + Math.abs(fifths) + '개';
+  }
+
+  function buildPicker() {
+    const sh = $('shifts'); sh.textContent = '';
+    for (const [label, by] of SHIFTS) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button'; b.textContent = label;
+      b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => select(b, { by });
+      sh.appendChild(b);
+    }
+    const kv = $('keys'); kv.textContent = '';
+    for (const [label, arg] of KEYS) {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      const n = document.createElement('span');
+      n.className = 'note'; n.textContent = label;
+      b.appendChild(n);
+      if (arg === info.key) {
+        b.classList.add('now');
+        const t = document.createElement('span');
+        t.className = 'tag'; t.textContent = '지금';
+        b.appendChild(t);
+        b.disabled = true;
+      } else {
+        b.onclick = () => select(b, { to: arg });
+      }
+      kv.appendChild(b);
+    }
+  }
+
+  function select(btn, opts) {
+    document.querySelectorAll('.chip[aria-pressed]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    choice = opts;
+    $('go').disabled = false;
+  }
+
+  async function openFile(f) {
+    reset();
+    fileName = f.name;
+    $('busytext').textContent = '악보를 읽는 중…';
+    show($('busy'), true);
+    try {
+      fileBytes = new Uint8Array(await f.arrayBuffer());
+      info = await inspectScore(fileBytes);
+    } catch (e) {
+      show($('busy'), false);
+      $('blockedtext').textContent = 'PDF 를 열지 못했습니다. 다른 파일로 다시 해보세요.';
+      show($('blocked'), true);
+      return;
+    }
+    show($('busy'), false);
+
+    if (info.problems.length) {
+      $('blockedtext').textContent = info.problems[0];
+      show($('blocked'), true);
+      return;
+    }
+    $('keyletter').textContent = fmtKey(info.key);
+    $('keysig').textContent = sigText(info.fifths);
+    $('fname').textContent = fileName;
+    const bits = [`오선 ${info.staves}단`, `음표 ${info.notes}개`, `코드 ${info.chords}개`];
+    if (info.keyChanges.length) bits.push('곡 중간에 조 바뀜: ' + info.keyChanges.map(fmtKey).join(' → '));
+    $('facts').textContent = bits.join(' · ');
+    show($('score'), true);
+    buildPicker();
+    $('go').disabled = true;
+    show($('picker'), true);
+    $('picker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function convert() {
+    if (!choice) return;
+    $('go').disabled = true;
+    $('busytext').textContent = '바꾸는 중…';
+    show($('busy'), true);
+    show($('result'), false);
+    await new Promise(r => setTimeout(r, 30));   // 화면이 먼저 그려지도록
+
+    let out;
+    try {
+      out = await transposeScore(fileBytes, choice);
+    } catch (e) {
+      show($('busy'), false);
+      $('blockedtext').textContent = '바꾸는 중 문제가 생겼습니다: ' + (e && e.message || e);
+      show($('blocked'), true);
+      return;
+    }
+    show($('busy'), false);
+    const rep = out.rep;
+
+    if (!out.bytes) {
+      $('blockedtext').textContent = rep.warnings[0] || '바꾸지 못했습니다.';
+      show($('blocked'), true);
+      $('go').disabled = false;
+      return;
+    }
+
+    $('resulttitle').textContent = `${fmtKey(rep.sourceKey)} → ${fmtKey(rep.targetKey)}`;
+    const line = [rep.interval, `오선 ${rep.staves}단`, `음표 ${rep.notes}개`, `코드 ${rep.chords}개`];
+    if (rep.ledgersAdded) line.push(`덧줄 ${rep.ledgersAdded}개 새로 그림`);
+    $('resultline').textContent = line.join(' · ');
+
+    // 코드가 어떻게 바뀌었는지 앞부분을 보여 준다
+    const cm = $('chordmap'); cm.textContent = '';
+    const iv = rep._iv;
+    (rep.chordPairs || []).slice(0, 10).forEach(([a, b]) => {
+      const li = document.createElement('li');
+      const f = document.createElement('span'); f.className = 'from'; f.textContent = fmtKey(a);
+      const ar = document.createElement('span'); ar.className = 'arrow'; ar.textContent = '→';
+      const t = document.createElement('span'); t.textContent = fmtKey(b);
+      li.append(f, ar, t); cm.appendChild(li);
+    });
+
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    blobUrl = URL.createObjectURL(new Blob([out.bytes], { type: 'application/pdf' }));
+    const base = fileName.replace(/\.pdf$/i, '');
+    const save = $('save');
+    save.href = blobUrl;
+    save.setAttribute('download', `${base}_${rep.targetKey}.pdf`);
+
+    // 공유가 되는 기기(아이패드·폰)에서는 공유 시트를 띄운다
+    const shareBtn = $('share');
+    const outFile = new File([out.bytes], `${base}_${rep.targetKey}.pdf`, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [outFile] })) {
+      shareBtn.hidden = false;
+      shareBtn.onclick = async () => {
+        try { await navigator.share({ files: [outFile], title: `${base}_${rep.targetKey}` }); }
+        catch (err) { /* 사용자가 취소한 경우 — 아무것도 하지 않는다 */ }
+      };
+      $('savehint').textContent = '내려받거나, 공유로 다른 앱에 바로 보낼 수 있습니다.';
+    } else {
+      shareBtn.hidden = true;
+      $('savehint').textContent = '내려받은 파일은 브라우저의 다운로드 위치에 저장됩니다.';
+    }
+
+    const nd = $('notes'); nd.textContent = '';
+    if (rep.warnings.length) {
+      const box = document.createElement('div');
+      box.className = 'note-msg warn';
+      box.appendChild(document.createTextNode('살펴볼 점'));
+      const ul = document.createElement('ul');
+      rep.warnings.forEach(w => { const li = document.createElement('li'); li.textContent = w; ul.appendChild(li); });
+      box.appendChild(ul);
+      nd.appendChild(box);
+    }
+    $('go').disabled = false;
+    show($('result'), true);
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // --- 입력 이어 붙이기 ---
+  $('file').addEventListener('change', e => { if (e.target.files[0]) openFile(e.target.files[0]); });
+  $('pick').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); }
+  });
+  ['dragenter', 'dragover'].forEach(t => $('pick').addEventListener(t, e => {
+    e.preventDefault(); $('pick').classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(t => $('pick').addEventListener(t, e => {
+    e.preventDefault(); $('pick').classList.remove('over');
+  }));
+  $('pick').addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) openFile(f);
+  });
+  $('go').addEventListener('click', convert);
+  $('again').addEventListener('click', e => {
+    e.preventDefault();
+    show($('result'), false);
+    $('picker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+})();
+</script>
+</body>
+</html>
