@@ -166,6 +166,26 @@ function scalePitches(fifths) {
    뿌리음과 베이스음을 모두 센다. 베이스음을 빼놓으면 E 조 악보가 D 조로
    보인다 — E 의 음은 거의 다 D 에도 있지만 B/D# 와 E/G# 의 베이스음은
    D 조에 없기 때문이다. */
+/* 그 조가 이 코드들에 얼마나 들어맞는가 */
+function imgKeyScore(chords, name) {
+  const fifths = MAJOR_FIFTHS[name];
+  const scale = scalePitches(fifths);
+  let sharps = 0, flats = 0, score = 0;
+  for (const c of chords) {
+    if (c.rootAlter > 0 || c.bassAlter > 0) sharps++;
+    if (c.rootAlter < 0 || c.bassAlter < 0) flats++;
+    score += scale.has(pitchClass(c.root, c.rootAlter)) ? 1.0 : -1.5;
+    if (c.bass) score += scale.has(pitchClass(c.bass, c.bassAlter)) ? 1.0 : -1.5;
+  }
+  const tonic = pitchClass(name[0], alterOf(name.slice(1, 2)));
+  const last = chords[chords.length - 1], first = chords[0];
+  if (pitchClass(last.root, last.rootAlter) === tonic) score += 3.0;
+  if (pitchClass(first.root, first.rootAlter) === tonic) score += 2.0;
+  if (fifths > 0) score += 0.35 * sharps - 0.35 * flats;
+  else if (fifths < 0) score += 0.35 * flats - 0.35 * sharps;
+  return score - Math.abs(fifths) * 0.08;
+}
+
 function imgGuessKey(chords) {
   if (!chords.length) throw new Error('코드를 하나도 읽지 못했습니다.');
   let sharps = 0, flats = 0;
@@ -304,12 +324,19 @@ function similarPatch(p, q) {
 // ------------------------------------------------------------- 쪽 그리기
 
 /* PDF 나 그림 파일을 쪽마다 큼직한 캔버스로 그린다 */
+function looksLikePdf(bytes) {
+  // '%PDF' 로 시작하면 PDF 다. 파일 이름이나 형식 꼬리표는 믿을 게 못 된다 —
+  // 아이폰 사진은 HEIC 로 오고, 이름이 없는 채로 들어오기도 한다.
+  return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 &&
+         bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
 async function imgRenderPages(bytes, fileName) {
-  const isImage = /\.(jpe?g|png|gif|bmp|webp|tiff?)$/i.test(fileName || '');
+  const isImage = !looksLikePdf(bytes);
   const pages = [];
 
   if (isImage) {
-    const blob = new Blob([bytes]);
+    const blob = new Blob([bytes]);   // 형식은 브라우저가 알아서 가린다
     const url = URL.createObjectURL(blob);
     try {
       const im = await new Promise((res, rej) => {
@@ -662,9 +689,14 @@ async function imgInspect(bytes, fileName, onProgress) {
   const cs = hits.map(h => h.chord);
   if (cs.length >= 12) {
     const third = Math.floor(cs.length / 3);
-    const headKey = imgGuessKey(cs.slice(0, third));
-    const tailKey = imgGuessKey(cs.slice(-third));
-    if (headKey !== tailKey) {
+    const head = cs.slice(0, third), tail = cs.slice(-third);
+    const headKey = imgGuessKey(head);
+    const tailKey = imgGuessKey(tail);
+    // 앞뒤 조가 다르게 나왔다고 곧바로 전조로 보면 안 된다. 코드 몇 개만
+    // 달리 읽혀도 이웃한 조로 기울기 때문이다. 뒤쪽 코드에 대해 뒤쪽 조가
+    // 앞쪽 조보다 **뚜렷하게** 나을 때만 전조로 친다.
+    const margin = imgKeyScore(tail, tailKey) - imgKeyScore(tail, headKey);
+    if (headKey !== tailKey && margin >= tail.length * 0.8) {
       out.keyChanges = [headKey, tailKey];
       if (out.withNotes) {
         out.withNotes = false;
