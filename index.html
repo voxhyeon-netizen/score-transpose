@@ -216,7 +216,7 @@ button.chip:disabled{opacity:.4; cursor:default}
     </svg>
     <strong>악보 PDF 고르기</strong>
     <span>여기를 누르거나 파일을 끌어다 놓으세요</span>
-    <input type="file" id="file" accept="application/pdf,.pdf">
+    <input type="file" id="file" accept="application/pdf,.pdf,image/jpeg,image/png,.jpg,.jpeg,.png">
   </label>
 
   <div class="panel" id="busy" hidden>
@@ -340,6 +340,10 @@ button.chip:disabled{opacity:.4; cursor:default}
 <script src="engine.js"></script>
 <script src="preview.js"></script>
 <script src="audio.js"></script>
+<script src="imgbits.js"></script>
+<script src="imgnotes.js"></script>
+<script src="imgocr.js"></script>
+<script src="imgscore.js"></script>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
@@ -349,12 +353,14 @@ button.chip:disabled{opacity:.4; cursor:default}
 
   let fileBytes = null, fileName = '', info = null, choice = null, blobUrl = null;
   let previewBytes = null, previewDone = false;
+  let imgInfo = null;      // 쪽이 통째로 그림인 악보일 때만 채워진다
 
   const show = (el, on) => { el.hidden = !on; };
 
   function reset() {
     $('score').hidden = $('picker').hidden = $('result').hidden = $('blocked').hidden = true;
     choice = null;
+    imgInfo = null;
     if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
   }
 
@@ -409,26 +415,47 @@ button.chip:disabled{opacity:.4; cursor:default}
     fileName = f.name;
     $('busytext').textContent = '악보를 읽는 중…';
     show($('busy'), true);
+    const looksImage = /\.(jpe?g|png)$/i.test(fileName);
     try {
       fileBytes = new Uint8Array(await f.arrayBuffer());
-      info = await inspectScore(fileBytes);
+      info = looksImage ? { problems: ['그림 파일입니다.'] }
+                        : await inspectScore(fileBytes);
     } catch (e) {
       show($('busy'), false);
       $('blockedtext').textContent = 'PDF 를 열지 못했습니다. 다른 파일로 다시 해보세요.';
       show($('blocked'), true);
       return;
     }
-    show($('busy'), false);
 
+    // 쪽이 통째로 그림인 악보는 고칠 그리기 명령이 없다. 그때는 픽셀을
+    // 직접 다루는 쪽으로 넘어간다 (글자 읽기 도구를 그제서야 받는다).
     if (info.problems.length) {
-      $('blockedtext').textContent = info.problems[0];
-      show($('blocked'), true);
-      return;
+      $('busytext').textContent = '그림 악보입니다. 글자를 읽는 중…';
+      try {
+        imgInfo = await imgInspect(fileBytes, fileName,
+                                   m => { $('busytext').textContent = m; });
+      } catch (e) {
+        imgInfo = null;
+      }
+      if (imgInfo && !imgInfo.problems.length) {
+        info = imgInfo;
+      } else {
+        show($('busy'), false);
+        $('blockedtext').textContent =
+          (imgInfo && imgInfo.problems[0]) || info.problems[0];
+        show($('blocked'), true);
+        imgInfo = null;
+        return;
+      }
     }
+    show($('busy'), false);
     $('keyletter').textContent = fmtKey(info.key);
     $('keysig').textContent = sigText(info.fifths);
     $('fname').textContent = fileName;
-    const bits = [`오선 ${info.staves}단`, `음표 ${info.notes}개`, `코드 ${info.chords}개`];
+    const bits = imgInfo
+      ? [`그림 악보`, `오선 ${info.staves}단`, `코드 ${info.chords}개`,
+         imgInfo.withNotes ? '음표까지 바꿉니다' : '코드만 바꿉니다']
+      : [`오선 ${info.staves}단`, `음표 ${info.notes}개`, `코드 ${info.chords}개`];
     if (info.keyChanges.length) bits.push('곡 중간에 조 바뀜: ' + info.keyChanges.map(fmtKey).join(' → '));
     $('facts').textContent = bits.join(' · ');
     show($('score'), true);
@@ -448,7 +475,10 @@ button.chip:disabled{opacity:.4; cursor:default}
 
     let out;
     try {
-      out = await transposeScore(fileBytes, choice);
+      out = imgInfo
+        ? await imgTransposeScore(imgInfo, imgTargetKey(imgInfo.key, choice),
+                                  m => { $('busytext').textContent = m; })
+        : await transposeScore(fileBytes, choice);
     } catch (e) {
       show($('busy'), false);
       $('blockedtext').textContent = '바꾸는 중 문제가 생겼습니다: ' + (e && e.message || e);
